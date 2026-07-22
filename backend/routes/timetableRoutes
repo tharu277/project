@@ -1,0 +1,37 @@
+const express = require('express');
+const router = express.Router();
+const Timetable = require('../models/Timetable');
+
+// POST: Add new timetable
+// Express handles path as: /api/timetables + / = /api/timetables
+router.post('/', async (req, res) => {
+  try {
+    const newTimetable = new Timetable(req.body);
+    const saved = await newTimetable.save();
+    res.status(201).json(saved);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET: Fetch all timetables
+router.get('/', async (req, res) => {
+  try {
+    const timetables = await Timetable.find();
+    res.status(200).json(timetables);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE: Delete a timetable
+router.delete('/:id', async (req, res) => {
+  try {
+    await Timetable.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+module.exports = router;

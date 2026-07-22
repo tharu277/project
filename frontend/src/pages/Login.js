@@ -4,25 +4,47 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
 export default function Login() {
-  const [form,setForm]       = useState({ email:'', password:'' });
-  const [error,setError]     = useState('');
-  const [loading,setLoading] = useState(false);
-  const [showPass,setShowPass] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const { login } = useAuth();
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email.trim()||!form.password) { setError('Please enter both email and password.'); return; }
-    setLoading(true); setError('');
+    if (!form.email.trim() || !form.password) { 
+      setError('Please enter both email and password.'); 
+      return; 
+    }
+    setLoading(true); 
+    setError('');
+
     try {
-      const { data } = await api.post('/api/auth/login', { email:form.email.trim().toLowerCase(), password:form.password });
+      const { data } = await api.post('/api/auth/login', { 
+        email: form.email.trim().toLowerCase(), 
+        password: form.password 
+      });
+
       login(data.user, data.token);
-      const paths = { admin:'/admin', driver:'/driver', passenger:'/passenger' };
-      navigate(paths[data.user.role]||'/');
-    } catch(err) {
-      setError(err.response?.data?.message||'Login failed. Please check your connection.');
-    } finally { setLoading(false); }
+
+      // App.jsx එකේ Routes වලට හරියටම Match වන paths:
+      const userRole = data.user?.role?.toLowerCase();
+      
+      const paths = { 
+        admin: '/admin', 
+        driver: '/driver', 
+        passenger: '/passenger' 
+      };
+
+      // Role එක හරි එකට Redirect කරන්න, නැත්නම් default /passenger එකට යවන්න
+      navigate(paths[userRole] || '/passenger');
+
+    } catch (err) {
+      setError(err.response?.data?.message || 'Login failed. Please check your connection.');
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   return (
@@ -66,7 +88,7 @@ export default function Login() {
           </form>
           <p style={S.switchText}>Don't have an account? <Link to="/register" style={S.switchLink}>Create one here</Link></p>
           <div style={S.roleHints}>
-            {[{i:'🛡',l:'Admin'},{i:'🚌',l:'Driver'},{i:'🧑',l:'Passenger'}].map(r=>(
+            {[{i:'',l:'Admin'},{i:'🚌',l:'Driver'},{i:'🧑',l:'Passenger'}].map(r=>(
               <span key={r.l} style={S.roleHint}>{r.i} {r.l}</span>
             ))}
           </div>
@@ -106,5 +128,3 @@ const S = {
   roleHints:{display:'flex',justifyContent:'center',gap:'10px',marginTop:'20px',flexWrap:'wrap'},
   roleHint:{fontSize:'11px',color:'#94a3b8',background:'#f8fafc',padding:'5px 12px',borderRadius:'99px',border:'1px solid #e2e8f0'},
 };
-
-

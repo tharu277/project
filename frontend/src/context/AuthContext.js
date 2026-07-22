@@ -1,35 +1,43 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-import { createContext, useContext, useState, useCallback } from 'react';
+const AuthContext = createContext();
 
-const AuthContext = createContext(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
 
-export function AuthProvider({ children }) {
-  const [user,  setUser]  = useState(() => { try { return JSON.parse(localStorage.getItem('sbts_user'))||null; } catch { return null; } });
-  const [token, setToken] = useState(() => localStorage.getItem('sbts_token')||null);
-
-  const login = useCallback((userData, jwt) => {
-    setUser(userData); setToken(jwt);
-    localStorage.setItem('sbts_user', JSON.stringify(userData));
-    localStorage.setItem('sbts_token', jwt);
+  useEffect(() => {
+    // LocalStorage එකෙන් User Data ගන්නවා
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error("Failed to parse user from localStorage", e);
+      }
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    setUser(null); setToken(null);
-    localStorage.removeItem('sbts_user');
-    localStorage.removeItem('sbts_token');
-  }, []);
+  const login = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuth:!!user }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
-  return ctx;
 };
 
-
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be inside AuthProvider');
+  }
+  return context;
+};
