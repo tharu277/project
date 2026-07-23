@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { subscribeUserToPush } from '../pushNotifications';
 
 const API = 'http://localhost:5000';
 
@@ -15,11 +16,12 @@ export default function DriverDashboard() {
   const [routes, setRoutes]             = useState([]);
   const [timetables, setTimetables]     = useState([]);
   
-  // Dummy Telemetry Data for Drivers
+  // Real-time Telemetry Data
   const [speed, setSpeed]               = useState(0);
   const [location, setLocation]         = useState({ lat: '6.9271', lng: '79.8612' });
 
-  const headers = { Authorization: `Bearer ${token}` };
+  // Watch ID reference to clear GPS listener on stop
+  const watchIdRef = useRef(null);
 
   useEffect(() => {
     // Fetch Routes
@@ -33,6 +35,60 @@ export default function DriverDashboard() {
       .catch(() => setTimetables([]));
   }, []);
 
+  // 📡 Real-Time GPS Tracking Logic
+  useEffect(() => {
+    const headers = { Authorization: `Bearer ${token}` };
+
+    if (isOnTrip) {
+      if ('geolocation' in navigator) {
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude, speed: rawSpeed } = position.coords;
+
+            setLocation({
+              lat: latitude.toFixed(6),
+              lng: longitude.toFixed(6)
+            });
+
+            const calculatedSpeed = rawSpeed ? Math.round(rawSpeed * 3.6) : 0;
+            setSpeed(calculatedSpeed);
+
+            // Backend එකට real-time coordinates යැවීම
+            axios.patch(`${API}/api/buses/status`, {
+              driverId: user?._id,
+              status: 'on-trip',
+              routeNumber: selectedRoute,
+              location: { lat: latitude, lng: longitude },
+              speed: calculatedSpeed
+            }, { headers }).catch(err => console.log('Location update error:', err));
+          },
+          (error) => {
+            console.error('GPS Error:', error.message);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000
+          }
+        );
+      } else {
+        alert('Your device / browser does not support GPS Geolocation.');
+      }
+    } else {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setSpeed(0);
+    }
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, [isOnTrip, selectedRoute, user?._id, token]);
+
   const safeRoutes     = Array.isArray(routes) ? routes : [];
   const safeTimetables = Array.isArray(timetables) ? timetables : [];
 
@@ -40,8 +96,8 @@ export default function DriverDashboard() {
   const handleLogout = () => {
     try {
       if (logout) logout();
-      localStorage.clear(); // Clear all saved auth data
-      navigate('/login');   // Navigate to login screen
+      localStorage.clear();
+      navigate('/login');
     } catch (err) {
       console.error("Logout failed:", err);
     }
@@ -50,20 +106,31 @@ export default function DriverDashboard() {
   // Toggle Live Trip Handler
   const toggleTripStatus = async () => {
     try {
+      if (!selectedRoute && !isOnTrip) {
+        alert('Please select a route before starting the trip!');
+        return;
+      }
+
       const nextStatus = !isOnTrip;
       setIsOnTrip(nextStatus);
 
-      if (nextStatus) {
-        setSpeed(42);
-      } else {
-        setSpeed(0);
-      }
+      const headers = { Authorization: `Bearer ${token}` };
 
+      // Update bus status
       await axios.patch(`${API}/api/buses/status`, {
         driverId: user?._id,
         status: nextStatus ? 'on-trip' : 'inactive',
         routeNumber: selectedRoute
       }, { headers }).catch(err => console.log('Status sync simulated', err));
+
+      // 📲 Trip එක Start කළ සැනින් සියලුම Passengers ලාගේ Phones වලට Push Notification යැවීම
+      if (nextStatus) {
+        axios.post(`${API}/api/notifications/send`, {
+          title: `🚌 Bus Started! (Route ${selectedRoute})`,
+          body: `Bus on Route ${selectedRoute} is now active and on live trip.`,
+          routeNumber: selectedRoute
+        }).catch(err => console.log('Push notification trigger error:', err));
+      }
 
     } catch (err) {
       console.error('Trip toggle error:', err);
@@ -83,12 +150,16 @@ export default function DriverDashboard() {
           </div>
         </div>
         <div style={S.navRight}>
+          {/* Styled Notification Button */}
+          <button onClick={subscribeUserToPush} style={S.notificationBtn}>
+            🔔 Enable Alerts
+          </button>
+
           <Link to="/tracking" style={S.navBtn}>
             <span style={S.liveDot} />
             🗺️ View Live Map
           </Link>
           
-          {/* Slices Logout Action */}
           <button onClick={handleLogout} style={S.navLogoutBtn}>
             ⏻ Logout
           </button>
@@ -116,7 +187,7 @@ export default function DriverDashboard() {
         </div>
 
         <div style={{...S.statCard, borderLeftColor: '#f59e0b'}}>
-          <div style={S.statNum}>GPS Active</div>
+          <div style={S.statNum}>{isOnTrip ? '📡 Active' : 'Location'}</div>
           <div style={S.statLabel}>Lat: {location.lat} | Lng: {location.lng}</div>
         </div>
       </div>
@@ -155,8 +226,8 @@ export default function DriverDashboard() {
               
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>
                 {isOnTrip 
-                  ? '📡 Live location is currently broadcasting to passengers.' 
-                  : '⚠️ Click to start sharing location on the public live map.'}
+                  ? '📡 Live GPS location & speed are broadcasting.' 
+                  : '⚠️ Click to start sharing live GPS coordinates.'}
               </span>
             </div>
 
@@ -194,7 +265,7 @@ export default function DriverDashboard() {
   );
 }
 
-// 🎨 Matching Premium Styling System
+// 🎨 Styling System
 const S = {
   page: { minHeight: '100vh', background: '#f8fafc', fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif" },
   nav: { background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '14px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' },
@@ -214,7 +285,25 @@ const S = {
   },
   navBrand: { fontSize: '16px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em' },
   navTag: { fontSize: '11px', color: '#64748b', fontWeight: '500' },
-  navRight: { display: 'flex', gap: '10px' },
+  navRight: { display: 'flex', gap: '10px', alignItems: 'center' },
+  
+  // 🔔 New Notification Button Style (Matches Header Aesthetic)
+  notificationBtn: {
+    padding: '9px 16px',
+    background: '#f1f5f9',
+    color: '#334155',
+    border: '1px solid #cbd5e1',
+    borderRadius: '10px',
+    fontSize: '12px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+  },
+  
   navBtn: { 
     padding: '9px 18px', 
     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 

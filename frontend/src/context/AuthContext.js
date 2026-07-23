@@ -6,13 +6,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // LocalStorage එකෙන් User Data ගන්නවා
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
       } catch (e) {
-        console.error("Failed to parse user from localStorage", e);
+        console.error("Failed to parse stored user", e);
       }
     }
   }, []);

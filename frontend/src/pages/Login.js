@@ -1,51 +1,54 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api from '../utils/api';
+import axios from 'axios';
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email.trim() || !form.password) { 
-      setError('Please enter both email and password.'); 
-      return; 
-    }
-    setLoading(true); 
     setError('');
+    setLoading(true);
 
     try {
-      const { data } = await api.post('/api/auth/login', { 
-        email: form.email.trim().toLowerCase(), 
+      const response = await axios.post('http://localhost:5000/api/auth/login', { 
+        email: form.email.trim(), 
         password: form.password 
       });
 
-      login(data.user, data.token);
+      if (response.data && response.data.user) {
+        const user = response.data.user;
+        
+        // Auth Context / LocalStorage update කිරීම
+        login(user);
 
-      // App.jsx එකේ Routes වලට හරියටම Match වන paths:
-      const userRole = data.user?.role?.toLowerCase();
-      
-      const paths = { 
-        admin: '/admin', 
-        driver: '/driver', 
-        passenger: '/passenger' 
-      };
-
-      // Role එක හරි එකට Redirect කරන්න, නැත්නම් default /passenger එකට යවන්න
-      navigate(paths[userRole] || '/passenger');
-
+        // 🟢 Role එක අනුව අදාළ Dashboard එකට auto navigate කිරීම
+        if (user.role === 'passenger') {
+          navigate('/Passenger'); // නැතහොත් ඔයාගේ Passenger page route එක
+        } else if (user.role === 'driver') {
+          navigate('/Driver');
+        } else if (user.role === 'admin') {
+          navigate('/Admin');
+        } else {
+          navigate('/Home');
+        }
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your connection.');
-    } finally { 
-      setLoading(false); 
+      console.error('Login error:', err);
+      const msg = err.response?.data?.message || 'Login failed. Please check your credentials.';
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
   };
+  
 
   return (
     <div style={S.page}>
@@ -65,36 +68,51 @@ export default function Login() {
         <div style={S.formCard}>
           <h2 style={S.formTitle}>Sign in to your account</h2>
           <p style={S.formSub}>Enter your credentials to continue</p>
+          
           {error && <div style={S.errorBox} role="alert">⚠️ {error}</div>}
-          <form onSubmit={handleSubmit} noValidate>
+          
+          <form onSubmit={handleSubmit}>
             <div style={S.field}>
               <label style={S.label}>EMAIL ADDRESS</label>
-              <input style={S.input} type="email" placeholder="you@example.com"
-                value={form.email} onChange={e=>setForm({...form,email:e.target.value})} autoComplete="email" required />
+              <input 
+                style={S.input} 
+                type="email" 
+                placeholder="you@example.com"
+                value={form.email} 
+                onChange={e => setForm({ ...form, email: e.target.value })} 
+                required 
+              />
             </div>
+
             <div style={S.field}>
               <label style={S.label}>PASSWORD</label>
               <div style={S.inputGroup}>
-                <input style={{...S.input,paddingRight:'48px'}} type={showPass?'text':'password'} placeholder="••••••••"
-                  value={form.password} onChange={e=>setForm({...form,password:e.target.value})} autoComplete="current-password" required />
-                <button type="button" style={S.eyeBtn} onClick={()=>setShowPass(p=>!p)} aria-label={showPass?'Hide':'Show'}>
-                  {showPass?'🙈':'👁'}
+                <input 
+                  style={{ ...S.input, paddingRight: '48px' }} 
+                  type={showPass ? 'text' : 'password'} 
+                  placeholder="••••••••"
+                  value={form.password} 
+                  onChange={e => setForm({ ...form, password: e.target.value })} 
+                  required 
+                />
+                <button 
+                  type="button" 
+                  style={S.eyeBtn} 
+                  onClick={() => setShowPass(p => !p)}
+                >
+                  {showPass ? '🙈' : '👁'}
                 </button>
               </div>
             </div>
-            <button type="submit" style={{...S.submitBtn,opacity:loading?0.7:1}} disabled={loading}>
-              {loading?<span style={S.btnRow}><span style={S.spinner}></span>Signing in...</span>:'Sign in →'}
+
+            <button type="submit" style={{ ...S.submitBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign in →'}
             </button>
           </form>
+
           <p style={S.switchText}>Don't have an account? <Link to="/register" style={S.switchLink}>Create one here</Link></p>
-          <div style={S.roleHints}>
-            {[{i:'',l:'Admin'},{i:'🚌',l:'Driver'},{i:'🧑',l:'Passenger'}].map(r=>(
-              <span key={r.l} style={S.roleHint}>{r.i} {r.l}</span>
-            ))}
-          </div>
         </div>
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
@@ -121,10 +139,6 @@ const S = {
   inputGroup:{position:'relative'},
   eyeBtn:{position:'absolute',right:'12px',top:'50%',transform:'translateY(-50%)',border:'none',background:'transparent',cursor:'pointer',fontSize:'16px'},
   submitBtn:{width:'100%',padding:'14px',background:'linear-gradient(135deg,#1d4ed8,#2563eb)',color:'#fff',border:'none',borderRadius:'12px',fontSize:'15px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},
-  btnRow:{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'},
-  spinner:{width:'16px',height:'16px',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin 0.8s linear infinite',display:'inline-block'},
   switchText:{textAlign:'center',fontSize:'14px',color:'#64748b',marginTop:'20px'},
-  switchLink:{color:'#1d4ed8',fontWeight:'700',textDecoration:'none'},
-  roleHints:{display:'flex',justifyContent:'center',gap:'10px',marginTop:'20px',flexWrap:'wrap'},
-  roleHint:{fontSize:'11px',color:'#94a3b8',background:'#f8fafc',padding:'5px 12px',borderRadius:'99px',border:'1px solid #e2e8f0'},
+  switchLink:{color:'#1d4ed8',fontWeight:'700',textDecoration:'none'}
 };

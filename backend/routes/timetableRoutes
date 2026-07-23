@@ -1,36 +1,63 @@
 const express = require('express');
 const router = express.Router();
-const Timetable = require('../models/Timetable');
+// ඔබගේ Timetable Model එක පහත Path එකෙන් Require කරගන්න
+const Timetable = require('../models/Timetable'); 
 
-// POST: Add new timetable
-// Express handles path as: /api/timetables + / = /api/timetables
-router.post('/', async (req, res) => {
-  try {
-    const newTimetable = new Timetable(req.body);
-    const saved = await newTimetable.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// GET: Fetch all timetables
+// 1. GET ALL TIMETABLES
+// Path: GET http://localhost:5000/api/timetables
 router.get('/', async (req, res) => {
   try {
-    const timetables = await Timetable.find();
+    const timetables = await Timetable.find().sort({ createdAt: -1 });
     res.status(200).json(timetables);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (error) {
+    console.error('Error fetching timetables:', error);
+    res.status(500).json({ message: 'Failed to fetch timetables', error: error.message });
   }
 });
 
-// DELETE: Delete a timetable
+// 2. CREATE A NEW TIMETABLE
+// Path: POST http://localhost:5000/api/timetables
+router.post('/', async (req, res) => {
+  try {
+    const { busNumber, routeNumber, stops } = req.body;
+
+    // Validation Check
+    if (!busNumber || !routeNumber || !stops || !Array.isArray(stops) || stops.length === 0) {
+      return res.status(400).json({ message: 'Bus number, route number, and at least one stop are required.' });
+    }
+
+    const newTimetable = new Timetable({
+      busNumber,
+      routeNumber,
+      stops
+    });
+
+    const savedTimetable = await newTimetable.save();
+    res.status(201).json({ 
+      message: 'Timetable created successfully', 
+      timetable: savedTimetable 
+    });
+  } catch (error) {
+    console.error('Error creating timetable:', error);
+    res.status(500).json({ message: 'Failed to create timetable', error: error.message });
+  }
+});
+
+// 3. DELETE A TIMETABLE BY ID
+// Path: DELETE http://localhost:5000/api/timetables/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await Timetable.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: 'Deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const { id } = req.params;
+    const deletedTimetable = await Timetable.findByIdAndDelete(id);
+
+    if (!deletedTimetable) {
+      return res.status(404).json({ message: 'Timetable not found' });
+    }
+
+    res.status(200).json({ message: 'Timetable deleted successfully', id });
+  } catch (error) {
+    console.error('Error deleting timetable:', error);
+    res.status(500).json({ message: 'Failed to delete timetable', error: error.message });
   }
 });
 

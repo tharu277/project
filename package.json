@@ -1,6 +1,32 @@
 {
   "dependencies": {
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6"
-  }
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pdfkit": "^0.19.1",
+    "pdfkit-table": "^0.2.11",
+    "react-hot-toast": "^2.6.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "web-push": "^3.6.7"
+  },
+  "name": "smart-bus-tracking",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tharu277/project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tharu277/project/issues"
+  },
+  "homepage": "https://github.com/tharu277/project#readme"
 }
